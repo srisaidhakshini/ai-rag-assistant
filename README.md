@@ -25,10 +25,48 @@ copy `.env.example` to `.env` and set `OPENAI_API_KEY` and/or
 
 ## Architecture
 
-```
- Document (PDF/TXT/DOCX/MD) -> Chunking (recursive, overlap) -> Embedding (OpenAI/ST/TF-IDF) -> FAISS Vector Store
-                                                                                                        |
- Answer + Citations <- LLM Generate (Claude/GPT/extractive) <- Top-k Retrieval (threshold) <------------+
+```mermaid
+flowchart TD
+    subgraph Ingestion["1. Document Ingestion & Processing"]
+        Doc["Document Upload<br/>(PDF, TXT, DOCX, MD)"] --> Validate["Validation & Checks<br/>(Size Limit, Scanned PDF Check)"]
+        Validate --> Chunking["Recursive Text Splitter<br/>(Chunk Size, Overlap, Boundaries)"]
+        Chunking --> Dedup["Deduplication<br/>(SHA-256 Chunk Hashing)"]
+    end
+
+    subgraph EmbeddingLayer["2. Embedding Generation & Fallback"]
+        Dedup --> EmbedSelector{"Embedding Provider"}
+        EmbedSelector -->|"Primary"| OpenAIEmbed["OpenAI<br/>(text-embedding-3-small)"]
+        EmbedSelector -->|"Fallback 1 (Local)"| STEmbed["Sentence-Transformers<br/>(all-MiniLM-L6-v2)"]
+        EmbedSelector -->|"Fallback 2 (Offline)"| TFIDFEmbed["TF-IDF Vectorizer<br/>(Zero-dependency)"]
+    end
+
+    subgraph Storage["3. Vector Index & Metadata Store"]
+        OpenAIEmbed --> FAISS["FAISS Vector Index<br/>(Normalized Cosine Sim)"]
+        STEmbed --> FAISS
+        TFIDFEmbed --> FAISS
+        Dedup -.-> DocStore["Document & Metadata Store<br/>(Source, Page, Chunk ID)"]
+    end
+
+    subgraph QueryFlow["4. Query & Retrieval Pipeline"]
+        UserQuery["User Query<br/>(Gradio UI)"] --> QueryEmbed["Embed Query<br/>(Active Provider)"]
+        QueryEmbed --> Search["FAISS Similarity Search<br/>(Top-k Candidates)"]
+        FAISS --> Search
+        Search --> Filter["Threshold Filtering<br/>(Relevance Cutoff Score)"]
+        DocStore -.-> ContextBuild["Context Assembler<br/>(Chunks + Citations + History)"]
+        Filter --> ContextBuild
+    end
+
+    subgraph GenerationLayer["5. Response Generation & Fallback"]
+        ContextBuild --> LLMSelector{"LLM Provider"}
+        LLMSelector -->|"Primary"| Claude["Anthropic Claude<br/>(Claude 3.5 Sonnet / Haiku)"]
+        LLMSelector -->|"Fallback 1"| GPT["OpenAI GPT<br/>(GPT-4o / GPT-4o-mini)"]
+        LLMSelector -->|"Fallback 2 (Local)"| Extractive["Extractive Fallback<br/>(Direct Grounded Passages)"]
+        Claude --> Output["Grounded Answer + Source Citations"]
+        GPT --> Output
+        Extractive --> Output
+    end
+
+    Output --> UI["Gradio Chat Interface"]
 ```
 
 Backend selection is automatic and falls back gracefully:
