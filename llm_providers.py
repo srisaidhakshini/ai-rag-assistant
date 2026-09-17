@@ -2,8 +2,24 @@
 (PRD requirement #7): Anthropic Claude -> OpenAI GPT -> extractive fallback.
 """
 import os
+import re
 
 import config
+
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "can", "did", "do",
+    "does", "for", "from", "had", "has", "have", "how", "i", "in", "is",
+    "it", "of", "on", "or", "that", "the", "this", "to", "was", "we",
+    "what", "when", "where", "which", "who", "why", "will", "with", "you",
+}
+
+
+def _words(text):
+    return set(re.findall(r"\w+", text.lower())) - _STOPWORDS
+
+
+def _split_sentences(text):
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()]
 
 
 def build_prompt(question, context_chunks, history):
@@ -74,16 +90,37 @@ class OpenAIProvider(LLMProvider):
 
 class ExtractiveProvider(LLMProvider):
     """No-API-needed fallback: returns the retrieved passages directly
-    instead of generating a synthesized answer."""
+    instead of generating a synthesized answer, trimmed to the sentences
+    that actually match the question so it reads like an answer rather
+    than a wall of chunk text."""
 
     name = "extractive"
+    MAX_SENTENCES = 2
 
     def generate(self, question, context_chunks, history):
-        lines = ["No LLM is configured, so here are the most relevant passages found:\n"]
+        query_words = _words(question)
+        lines = ["No LLM is configured, so here are the most relevant excerpts found:\n"]
         for i, c in enumerate(context_chunks, 1):
             loc = c["source"] + (f", p.{c['page']}" if c.get("page") else "")
-            lines.append(f"{i}. ({loc}) {c['text'].strip()}")
+            excerpt = self._best_excerpt(c["text"], query_words)
+            lines.append(f"{i}. ({loc}) {excerpt}")
         return "\n\n".join(lines)
+
+    def _best_excerpt(self, text, query_words):
+        sentences = _split_sentences(text)
+        if len(sentences) <= self.MAX_SENTENCES or not query_words:
+            return text.strip()
+
+        scored = sorted(
+            range(len(sentences)),
+            key=lambda i: len(_words(sentences[i]) & query_words),
+            reverse=True,
+        )
+        if len(_words(sentences[scored[0]]) & query_words) == 0:
+            return text.strip()  # no keyword overlap anywhere - don't guess which part matters
+
+        top_idx = sorted(scored[: self.MAX_SENTENCES])
+        return " ".join(sentences[i] for i in top_idx)
 
 
 def get_llm_provider():

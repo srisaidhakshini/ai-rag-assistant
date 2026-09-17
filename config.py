@@ -13,6 +13,13 @@ load_dotenv()
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "900"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "150"))
 TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+# How many extra candidates to pull per TOP_K slot before dedup/truncation -
+# CHUNK_OVERLAP means adjacent chunks are often near-duplicates, so without
+# over-fetching, dedup would silently shrink the context below TOP_K.
+RETRIEVAL_FANOUT = int(os.getenv("RAG_RETRIEVAL_FANOUT", "3"))
+# Overlap-coefficient (intersection / smaller set) above which two retrieved
+# chunks are considered near-duplicates and the lower-scoring one is dropped.
+DEDUP_OVERLAP_THRESHOLD = float(os.getenv("RAG_DEDUP_OVERLAP_THRESHOLD", "0.7"))
 MAX_FILE_SIZE_MB = float(os.getenv("RAG_MAX_FILE_SIZE_MB", "20"))
 HISTORY_TURNS = int(os.getenv("RAG_HISTORY_TURNS", "3"))
 

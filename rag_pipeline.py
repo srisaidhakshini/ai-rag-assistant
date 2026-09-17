@@ -11,6 +11,25 @@ from llm_providers import ExtractiveProvider, get_llm_provider
 from vectorstore import VectorStore
 
 
+def _dedupe_by_overlap(results, threshold):
+    """Greedily drops chunks whose word overlap with an already-kept, higher
+    scoring chunk exceeds `threshold`. CHUNK_OVERLAP means two adjacent
+    chunks from the same document are often near-duplicates once both score
+    highly - this keeps the retained set diverse instead of redundant."""
+    kept = []
+    kept_word_sets = []
+    for r in results:
+        words = set(r["text"].lower().split())
+        if any(
+            words and kw and len(words & kw) / min(len(words), len(kw)) >= threshold
+            for kw in kept_word_sets
+        ):
+            continue
+        kept.append(r)
+        kept_word_sets.append(words)
+    return kept
+
+
 class RagPipeline:
     def __init__(self, embedding_backend=None, llm_provider=None):
         self.embedding_backend = embedding_backend or get_embedding_backend()
@@ -76,9 +95,10 @@ class RagPipeline:
             return {"answer": "No documents indexed yet. Please upload a document first.", "citations": []}
 
         query_vec = self.embedding_backend.embed([question])[0]
-        results = self.vectorstore.search(query_vec, config.TOP_K)
+        candidates = self.vectorstore.search(query_vec, config.TOP_K * config.RETRIEVAL_FANOUT)
         threshold = config.RELEVANCE_THRESHOLDS.get(self.embedding_backend.name, config.DEFAULT_RELEVANCE_THRESHOLD)
-        relevant = [r for r in results if r["score"] >= threshold]
+        passing = [r for r in candidates if r["score"] >= threshold]
+        relevant = _dedupe_by_overlap(passing, config.DEDUP_OVERLAP_THRESHOLD)[: config.TOP_K]
 
         if not relevant:
             answer = (
