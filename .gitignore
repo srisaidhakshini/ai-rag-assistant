@@ -3,6 +3,8 @@ __pycache__/
 .env
 *.faiss
 *.meta.pkl
+*.pipeline.pkl
+.rag_store/
 .venv/
 venv/
 .pytest_cache/

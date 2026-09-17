@@ -79,3 +79,46 @@ def test_empty_question_is_handled_without_erroring(pipeline, handbook_file):
     pipeline.index_document(handbook_file)
     result = pipeline.ask("   ")
     assert result["citations"] == []
+
+
+def test_save_and_load_index_restores_state_across_pipelines(pipeline, handbook_file, tmp_path):
+    persist_path = str(tmp_path / "store" / "index")
+    pipeline.index_document(handbook_file)
+    pipeline.save_index(persist_path)
+
+    restored = RagPipeline(embedding_backend=TfidfEmbeddingBackend(), llm_provider=ExtractiveProvider())
+    loaded = restored.load_index(persist_path)
+    assert loaded is True
+    assert restored.status()["num_documents"] == 1
+
+    result = restored.ask("How many PTO days do employees get?")
+    assert "20" in result["answer"]
+    assert result["citations"][0]["source"] == "handbook.md"
+
+
+def test_load_index_returns_false_when_nothing_persisted(pipeline, tmp_path):
+    assert pipeline.load_index(str(tmp_path / "missing" / "index")) is False
+
+
+def test_load_index_returns_false_on_embedding_backend_mismatch(pipeline, handbook_file, tmp_path):
+    persist_path = str(tmp_path / "store" / "index")
+    pipeline.index_document(handbook_file)
+    pipeline.save_index(persist_path)
+
+    class OtherBackend(TfidfEmbeddingBackend):
+        name = "other-backend"
+
+    mismatched = RagPipeline(embedding_backend=OtherBackend(), llm_provider=ExtractiveProvider())
+    assert mismatched.load_index(persist_path) is False
+    assert mismatched.status()["num_documents"] == 0
+
+
+def test_reset_clears_the_persisted_index(pipeline, handbook_file, tmp_path):
+    persist_path = str(tmp_path / "store" / "index")
+    pipeline.index_document(handbook_file)
+    pipeline.save_index(persist_path)
+
+    pipeline.clear_persisted_index(persist_path)
+
+    fresh = RagPipeline(embedding_backend=TfidfEmbeddingBackend(), llm_provider=ExtractiveProvider())
+    assert fresh.load_index(persist_path) is False

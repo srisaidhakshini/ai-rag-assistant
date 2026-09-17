@@ -5,6 +5,7 @@ from ingestion import DocumentError
 from rag_pipeline import RagPipeline
 
 pipeline = RagPipeline()
+pipeline.load_index()  # best-effort restore from a previous run, if compatible
 
 PRIVACY_NOTE = (
     "_Privacy: when the OpenAI/Anthropic backends are active, document text and "
@@ -34,6 +35,7 @@ def handle_upload(files):
             messages.append(pipeline.index_document(path))
         except DocumentError as e:
             messages.append(f"Skipped: {e}")
+    pipeline.save_index()
     return "\n".join(messages), _status_text()
 
 

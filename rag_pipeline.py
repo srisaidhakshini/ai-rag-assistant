@@ -3,6 +3,7 @@ owns the cross-cutting v1 behaviors: dedup, relevance thresholding,
 conversation history, and graceful degradation on backend failures.
 """
 import os
+import pickle
 
 import config
 from embeddings import downgrade_embedding_backend, get_embedding_backend
@@ -136,6 +137,7 @@ class RagPipeline:
         self.history = []
         if self.embedding_backend.stateful:
             self.embedding_backend = type(self.embedding_backend)()
+        self.clear_persisted_index()
 
     def status(self):
         return {
@@ -144,3 +146,60 @@ class RagPipeline:
             "num_documents": len(self.indexed_files),
             "num_chunks": len(self.all_chunks),
         }
+
+    # -- persistence -----------------------------------------------------------
+
+    def save_index(self, path=None):
+        """Persists the vector index and pipeline bookkeeping to disk so a
+        restart can skip re-embedding everything (PRD Future Work #3)."""
+        if self.vectorstore is None:
+            return
+        path = path or config.PERSIST_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        self.vectorstore.save(path)
+        payload = {
+            "embedding_backend": self.embedding_backend.name,
+            "indexed_hashes": self.indexed_hashes,
+            "indexed_files": self.indexed_files,
+        }
+        if self.embedding_backend.stateful:
+            # Stateful backends (e.g. TF-IDF) fit their vector space to the
+            # corpus vocabulary - restoring only the vectors without the
+            # fitted backend would make a reloaded query embedding land in a
+            # different-dimensional space than the persisted index.
+            payload["stateful_backend"] = self.embedding_backend
+        with open(path + ".pipeline.pkl", "wb") as f:
+            pickle.dump(payload, f)
+
+    def load_index(self, path=None):
+        """Restores a previously saved index, but only if it was built with
+        the currently active embedding backend - vectors from different
+        backends live in incompatible spaces and can't be mixed. Returns
+        True if a matching index was found and loaded."""
+        path = path or config.PERSIST_PATH
+        pipeline_meta_path = path + ".pipeline.pkl"
+        if not os.path.exists(pipeline_meta_path) or not os.path.exists(path + ".faiss"):
+            return False
+
+        with open(pipeline_meta_path, "rb") as f:
+            saved = pickle.load(f)
+        if saved["embedding_backend"] != self.embedding_backend.name:
+            return False
+        if self.embedding_backend.stateful and "stateful_backend" in saved:
+            self.embedding_backend = saved["stateful_backend"]
+
+        vectorstore = VectorStore(dim=1)
+        vectorstore.load(path)
+        self.vectorstore = vectorstore
+        self.all_chunks = list(vectorstore.metadata)
+        self.indexed_hashes = saved["indexed_hashes"]
+        self.indexed_files = saved["indexed_files"]
+        return True
+
+    def clear_persisted_index(self, path=None):
+        path = path or config.PERSIST_PATH
+        for suffix in (".faiss", ".meta.pkl", ".pipeline.pkl"):
+            try:
+                os.remove(path + suffix)
+            except FileNotFoundError:
+                pass

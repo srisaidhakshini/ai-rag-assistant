@@ -3,6 +3,11 @@
 """
 import os
 
+# Must be set before the `tokenizers` library (pulled in by
+# sentence-transformers) is ever imported, or it prints a fork/parallelism
+# warning and can deadlock under multiprocessing.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import numpy as np
 
 import config
@@ -52,7 +57,12 @@ class SentenceTransformerBackend(EmbeddingBackend):
         self.model = SentenceTransformer(config.SENTENCE_TRANSFORMER_MODEL)
 
     def embed(self, texts):
-        vecs = self.model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+        vecs = self.model.encode(
+            texts,
+            batch_size=config.EMBEDDING_BATCH_SIZE,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )
         return vecs.astype("float32")
 
 

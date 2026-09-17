@@ -39,3 +39,9 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 OPENAI_LLM_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 SENTENCE_TRANSFORMER_MODEL = os.getenv("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
+EMBEDDING_BATCH_SIZE = int(os.getenv("RAG_EMBEDDING_BATCH_SIZE", "64"))
+
+# Where the index (FAISS + chunk metadata + pipeline bookkeeping) is persisted
+# to disk (PRD Future Work #3), so a restart doesn't force re-embedding
+# everything. Relative to the working directory the app is launched from.
+PERSIST_PATH = os.getenv("RAG_PERSIST_PATH", os.path.join(".rag_store", "index"))
