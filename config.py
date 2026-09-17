@@ -6,6 +6,10 @@ without needing to reload modules.
 """
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "900"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "150"))
 TOP_K = int(os.getenv("RAG_TOP_K", "4"))

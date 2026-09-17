@@ -38,6 +38,10 @@ def handle_upload(files):
 
 
 def handle_chat(message, chat_history):
+    if not message or not message.strip():
+        return chat_history, ""
+    if chat_history is None:
+        chat_history = []
     result = pipeline.ask(message)
     answer = result["answer"]
     if result["citations"]:
@@ -46,7 +50,11 @@ def handle_chat(message, chat_history):
             for c in result["citations"]
         )
         answer = f"{answer}\n\n**Sources:**\n{cite_lines}"
-    chat_history = chat_history + [(message, answer)]
+    
+    chat_history = chat_history + [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": answer},
+    ]
     return chat_history, ""
 
 
