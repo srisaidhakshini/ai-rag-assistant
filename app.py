@@ -7,21 +7,13 @@ from rag_pipeline import RagPipeline
 pipeline = RagPipeline()
 pipeline.load_index()  # best-effort restore from a previous run, if compatible
 
-PRIVACY_NOTE = (
-    "_Privacy: when the OpenAI/Anthropic backends are active, document text and "
-    "questions are sent to that provider's API for embedding/generation. Leave "
-    "`OPENAI_API_KEY` and `ANTHROPIC_API_KEY` unset to keep everything fully "
-    "local (TF-IDF + extractive answers)._"
-)
-
-
 def _status_text():
     s = pipeline.status()
     return (
         f"**Embedding backend:** {s['embedding_backend']} &nbsp;|&nbsp; "
         f"**LLM backend:** {s['llm_backend']} &nbsp;|&nbsp; "
         f"**Documents indexed:** {s['num_documents']} &nbsp;|&nbsp; "
-        f"**Chunks:** {s['num_chunks']}\n\n{PRIVACY_NOTE}"
+        f"**Chunks:** {s['num_chunks']}"
     )
 
 
