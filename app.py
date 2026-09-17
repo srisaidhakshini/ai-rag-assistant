@@ -1,4 +1,8 @@
 """Gradio UI: upload documents, index them, ask grounded questions, reset."""
+import utils.clients
+import utils.http_session
+import utils.transport
+import utils.session
 import gradio as gr
 
 from ingestion import DocumentError
