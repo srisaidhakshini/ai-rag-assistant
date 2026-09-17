@@ -94,4 +94,6 @@ with gr.Blocks(title="Mini RAG Assistant") as demo:
     reset_btn.click(handle_reset, outputs=[chatbot, status_box, index_log])
 
 if __name__ == "__main__":
-    demo.launch()
+    import os
+    port = int(os.getenv("PORT", "7860"))
+    demo.launch(server_name="0.0.0.0", server_port=port)
