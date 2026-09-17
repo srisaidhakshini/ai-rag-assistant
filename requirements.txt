@@ -6,8 +6,9 @@ scikit-learn>=1.3.0
 gradio>=4.30.0
 python-dotenv>=1.0.0
 
-# Optional, heavier backends - the app runs fine without them (falls back to
-# TF-IDF embeddings + extractive answers). Comment out to keep install light.
-sentence-transformers>=2.2.2
+# Optional: PyTorch & sentence-transformers are ~4GB with CUDA dependencies.
+# Commented out for lightweight cloud hosting (Render/Koyeb 512MB free tier).
+# Un-comment if you have a high-memory server with PyTorch installed.
+# sentence-transformers>=2.2.2
 openai>=1.0.0
 anthropic>=0.34.0
